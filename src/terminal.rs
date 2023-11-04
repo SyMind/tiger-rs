@@ -21,6 +21,7 @@
 
 use std::io::stderr;
 use std::os::raw::c_int;
+#[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 
 const BOLD: &str = "\x1b[1m";
@@ -86,12 +87,23 @@ impl Terminal {
     }
 }
 
+#[cfg(unix)]
 fn stderr_is_a_tty() -> bool {
     unsafe {
         isatty(stderr().as_raw_fd()) != 0
     }
 }
 
+#[cfg(windows)]
+fn stderr_is_a_tty() -> bool {
+    false
+}
+
 extern "C" {
+    // `isatty` 是一个在 POSIX 系统（如 Unix、Linux、macOS）中的库函数，用于检查一个文件描述符是否关联到一个终端设备（也称为 TTY）。
+    // 在这段 Rust 代码中，`isatty` 函数被声明为一个外部 C 函数。这意味着这个函数实际上是在 C 语言的运行时库中实现的，而 Rust 代码可以调用它。
+    // 函数接受一个 `c_int` 类型的参数 `fd`，这是要检查的文件描述符。在 Unix-like 系统中，文件描述符是一个整数，用于代表一个打开的文件或其他类型的 I/O 资源。
+    // 函数返回一个 `c_int` 类型的值。如果文件描述符关联到一个终端设备，`isatty` 返回非零值；否则，返回零。
+    // 这个函数通常用于确定程序的输出是否应该格式化为适合在终端上显示，或者应该以更适合机器处理的方式（如日志文件或管道到其他程序）进行格式化。
     fn isatty(fd: c_int) -> c_int;
 }

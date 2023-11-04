@@ -26,6 +26,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
+use std::arch::asm;
 
 use data_layout::{
     ARRAY_DATA_LAYOUT_SIZE,
@@ -501,7 +502,7 @@ fn size_of(ptr: usize) -> usize {
 fn rbp() -> usize {
     let result: usize;
     unsafe {
-        llvm_asm!("mov $0, rbp" : "=r"(result) : : : "intel")
+        asm!("mov {0}, rbp", out(reg) result)
     }
     result
 }
