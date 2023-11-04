@@ -453,8 +453,10 @@ impl<'a, F: Clone + Debug + Frame + PartialEq> SemanticAnalyzer<'a, F> {
                 let old_temp_map = mem::replace(&mut self.temp_map, TempMap::new());
                 let old_escaping_vars = mem::replace(&mut self.escaping_vars, vec![]);
                 let mut levels = vec![];
+                // 收集参数到 env 中
                 for &WithPos { node: FuncDeclaration { ref name, ref params, ref result, .. }, .. } in declarations {
                     let func_name = name.node;
+                    // 寻找哪些变量逃逸
                     let formals = params.iter()
                         .map(|param| self.env.look_escape(param.node.name))
                         .collect();
@@ -487,6 +489,7 @@ impl<'a, F: Clone + Debug + Frame + PartialEq> SemanticAnalyzer<'a, F> {
                     });
                 }
 
+                // 收集局部变量到 env 中
                 for (&WithPos { node: FuncDeclaration { ref params, ref body, ref result, .. }, .. }, ref level) in
                     declarations.iter().zip(&levels)
                 {

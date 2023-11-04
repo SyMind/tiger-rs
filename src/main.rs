@@ -105,18 +105,24 @@ fn drive(strings: Rc<Strings>, symbols: &mut Symbols<()>) -> Result<(), Error> {
     if let Some(filename) = args.next() {
         let file = BufReader::new(File::open(&filename)?);
         let file_symbol = symbols.symbol(&filename);
+        // 1. 词法分析
         let lexer = Lexer::new(file, file_symbol);
         let main_symbol = symbols.symbol("main");
         let self_symbol = symbols.symbol("self");
         let object_symbol = symbols.symbol("Object");
+        // 2. 语法分析
         let mut parser = Parser::new(lexer, symbols);
         let ast = parser.parse()?;
+        // 3. 实现了一些操作来对表达式（Expr）进行重写。它的目标是让垃圾回收（GC）更方便地收集不再需要的数据。
         let mut rewriter = Rewriter::new(symbols);
         let ast = rewriter.rewrite(ast);
+        // 4. 找出所有需要 "逃逸" 的变量
         let escape_env = find_escapes(&ast, Rc::clone(&strings));
+        // 5. Env 结构体表示了一个环境，这个环境存储了与编译、类型检查、代码生成等任务相关的信息
         let mut env = Env::<X86_64>::new(&strings, escape_env);
         {
             let semantic_analyzer = SemanticAnalyzer::new(&mut env, Rc::clone(&strings), self_symbol, object_symbol);
+            // Fragment 枚举用于表示计算机程序的一部分（例如，函数、字符串或者虚拟表）
             let fragments = semantic_analyzer.analyze(main_symbol, ast)?;
 
             let mut asm_output_path = PathBuf::from(&filename);
@@ -171,10 +177,14 @@ fn drive(strings: Rc<Strings>, symbols: &mut Symbols<()>) -> Result<(), Error> {
                         let mut frame = frame.borrow_mut();
                         let body = frame.proc_entry_exit1(body);
 
+                        // 将函数体body转换为一系列线性化的语句，这可能涉及到删除无用的跳转，排序语句等
                         let statements = linearize(body);
+                        // 对得到的线性化语句进行基本块分析。基本块是一种在编译器中使用的程序结构，在基本块内部，控制流程是线性的
                         let (basic_blocks, done_label) = basic_blocks(statements);
+                        // 对基本块进行跟踪调度，为了改善程序的运行时间
                         let statements = trace_schedule(basic_blocks, done_label);
 
+                        // 使用Gen生成器，将语句转化为目标代码（这里是 X86_64 汇编的表示形式）
                         let mut generator = Gen::<X86_64>::new();
                         for statement in statements {
                             generator.munch_statement(statement);
@@ -182,10 +192,12 @@ fn drive(strings: Rc<Strings>, symbols: &mut Symbols<()>) -> Result<(), Error> {
                         let instructions = generator.get_result();
                         let instructions = frame.proc_entry_exit2(instructions, escaping_vars);
 
+                        // 调用alloc为使用的临时变量分配物理寄存器或内存空间
                         let (instructions, temp_map) = alloc::<X86_64>(instructions, &mut *frame, temp_map);
                         pointer_map.push(temp_map);
 
                         let subroutine = frame.proc_entry_exit3(instructions);
+                        // 将生成的指令写入文件
                         writeln!(file, "{}", subroutine.prolog)?;
                         for instruction in subroutine.body {
                             let instruction = instruction.to_string::<X86_64>();
@@ -215,6 +227,7 @@ fn drive(strings: Rc<Strings>, symbols: &mut Symbols<()>) -> Result<(), Error> {
             writeln!(file, "    dq {}", END_MARKER)?;
             writeln!(file, "{}:", END_MARKER)?;
 
+            // 这段代码使用了 Rust 的 Command 类来启动一个新的进程执行 nasm 命令。nasm 是一个通用的 x86 汇编器，将汇编源文件转换为机器语言的可执行文件或目标文件。
             let status = Command::new("nasm")
                 .args(&["-f", "elf64", asm_output_path.to_str().expect("asm output path")])
                 .status();
