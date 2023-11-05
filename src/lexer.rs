@@ -338,7 +338,7 @@ impl<R: Read> Lexer<R> {
             return match ch {
                 b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.identifier(),
                 b'0'..=b'9' => self.integer(),
-                b' ' | b'\n' | b'\t' => {
+                b' ' | b'\n' | b'\t' | b'\r' => {
                     self.advance()?;
                     self.token()
                 }
